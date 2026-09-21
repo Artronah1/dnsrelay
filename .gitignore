@@ -1,0 +1,35 @@
+# Builds
+dnsrelay
+dnsrelay-*
+dnsbrute
+
+# Data files (large, download separately)
+public-resolvers.md
+relays.md
+relays-all.md
+dnscry.pt-resolvers.md
+quad9-resolvers.md
+odoh-relays.md
+odoh-servers.md
+
+# Results (generated)
+*-matrix.tsv
+*-routes.toml
+*-alive.md
+*-top.md
+*-matrix-routes.toml
+*.log
+
+# Test artifacts
+test-*
+v2-*
+mxlinux-*
+final-*
+google-test*
+matrix-*
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
