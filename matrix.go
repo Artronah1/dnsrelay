@@ -433,7 +433,7 @@ func printSuggestedRoutes(results []MatrixResult, outFile string) {
 
 	var chosen []*resStat
 	for _, s := range candidates {
-		if len(chosen) >= topN {
+		if len(chosen) >= recommendN {
 			break
 		}
 		// Pick the top 3 relays with a penalty for reuse

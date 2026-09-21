@@ -23,6 +23,7 @@ var (
 	proto         string
 	topN          int
 	onlyEU	      bool
+	recommendN    int
 	globalClient       *dnscrypt.Client
 	globalResolverInfo *dnscrypt.ResolverInfo
 
@@ -70,6 +71,7 @@ func init() {
 	flag.StringVar(&outPrefix, "out-prefix", "auto", "output file prefix for -mode auto")
 	flag.StringVar(&excludeRelayPatterns, "exclude-relay-pattern", "moscow,russia,msk,spb", "substrings in relay names to exclude (comma-separated)")
 	flag.BoolVar(&onlyEU, "only-eu", false, "keep only European relays (by name)")
+	flag.IntVar(&recommendN, "recommend", 10, "number of resolvers to recommend in final config (for -mode matrix/auto)")
 }
 
 func main() {
