@@ -67,7 +67,7 @@ func init() {
 	flag.StringVar(&matrixOutFile, "matrix-out", "matrix.tsv", "where to write the matrix")
 	flag.StringVar(&resolversFilterOut, "resolvers-filter-out", "resolvers-alive.md", "where to write live resolvers")
 	flag.StringVar(&dnscryptOutFile, "out-file", "", "where to write live relays (only for -mode dnscrypt)")
-	flag.IntVar(&topN, "top", 5, "how many resolvers to recommend (for -mode matrix/auto)")
+	flag.IntVar(&topN, "top", 100, "how many resolvers to test in the matrix (for -mode matrix/auto)")
 	flag.StringVar(&outPrefix, "out-prefix", "auto", "output file prefix for -mode auto")
 	flag.StringVar(&excludeRelayPatterns, "exclude-relay-pattern", "moscow,russia,msk,spb", "substrings in relay names to exclude (comma-separated)")
 	flag.BoolVar(&onlyEU, "only-eu", false, "keep only European relays (by name)")
