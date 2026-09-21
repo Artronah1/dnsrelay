@@ -1,86 +1,83 @@
-# README.md для `dnsrelay`
-
-Скопируй в `~/dnsbrute/README.md`:
-
-```markdown
 # dnsrelay
 
-Утилита на Go для поиска рабочих пар **резолвер + релей** для `dnscrypt-proxy`
-с анонимизацией (Anonymized DNSCrypt / ODoH).
+> Find working **(resolver, relay)** pairs for [Anonymized DNSCrypt](https://github.com/DNSCrypt/dnscrypt-proxy/wiki/Anonymized-DNS) and ODoH, and generate a ready-to-use `dnscrypt-proxy.toml` config.
 
-Собирает матрицу «резолвер × релей», отсеивает мёртвые/неподходящие варианты
-и выдаёт **готовый блок конфига** для `/etc/dnscrypt-proxy/dnscrypt-proxy.toml`.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://go.dev/)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)]()
 
-## Зачем
+`dnscrypt-proxy` supports Anonymized DNSCrypt via relays, but **not every (resolver, relay) pair works**: some relays block "their own" resolvers, some resolvers forward to Google, some relays are only reachable from certain regions. Finding working pairs manually takes hours.
 
-`dnscrypt-proxy` умеет анонимизировать запросы через релеи, но **не все пары
-(резолвер, релей) работают**. Некоторые релеи блокируют «свои» резолверы, некоторые
-резолверы форвардят в Google, некоторые релеи лежат только в РФ или Азии.
+`dnsrelay` builds a full **resolver × relay matrix** in minutes and outputs a ready-to-use config.
 
-Вручную это выяснять — часы. `dnsrelay` делает это за минуты и сразу даёт конфиг.
+---
 
-## Что умеет
+## Features
 
-- **`auto`** — полный конвейер: фильтр живых резолверов → фильтр живых релеев →
-  матрица → готовый конфиг. Одна команда.
-- **`dnscrypt`** — фильтр живых DNSCrypt-релеев.
-- **`resolvers-filter`** — фильтр живых DNSCrypt-резолверов.
-- **`matrix`** — матрица «резолвер × релей» + рекомендации.
-- **`tcp`** — быстрая проверка доступности релеев (только для отладки).
-- **`odoh`** — проверка ODoH-релеев и целей.
+- **7 modes** — `auto`, `dnscrypt`, `resolvers-filter`, `matrix`, `tcp`, `odoh`
+- **Full pipeline** — one command from raw `.md` lists to `*-routes.toml`
+- **Real-time progress** — with ETA, survives `Ctrl+C` (incremental dump)
+- **Auto-detect Google forwarders** — via `whoami.akamai.net` (this catches `dct-*` and similar)
+- **Relay deduplication** — max 3 resolvers per relay
+- **Region filters** — `-only-eu`, `-exclude-relay-pattern`
+- **Multi-arch** — x86_64, ARM64, ARMv7, MIPS (for OpenWrt routers)
 
-### Фичи
+---
 
-- ✅ **Запись готового конфига** в `*-routes.toml`
-- ✅ **Прогресс в реальном времени** с ETA
-- ✅ **Фильтр «не РФ»** — исключение релеев по паттернам
-- ✅ **Автоотсев Google-форвардеров** — через `whoami.akamai.net`
-- ✅ **Дедупликация релеев** — один релей не более чем в 3 резолверах
-- ✅ **Инкрементальный дамп** — не теряет результаты при `Ctrl+C`
-- ✅ **`-only-eu`** — фильтр «только европейские релеи»
+## Install
 
-## Сборка
-
-Нужен Go 1.21+.
+### From source
 
 ```bash
-# Для текущей машины
+git clone https://github.com/Artronah1/dnsrelay.git
+cd dnsrelay
 go build -ldflags="-s -w" -o dnsrelay
-
-# Под ARM64 (Routerich, современные роутеры)
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dnsrelay-arm64
-
-# Под MIPS (старые роутеры, OpenWrt)
-CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w" -o dnsrelay-mips
-
-# Под ARMv7 (Mikrotik и др.)
-CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" -o dnsrelay-armv7
 ```
 
-## Файлы данных
-
-Скачиваются один раз в папку с утилитой:
+### Cross-compile
 
 ```bash
-# Резолверы (основной список)
+# ARM64 (Routerich, modern routers)
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dnsrelay-arm64
+
+# ARMv7 (Mikrotik, older routers)
+CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" -o dnsrelay-armv7
+
+# MIPS big-endian (old TP-Link, Ubiquiti)
+CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w" -o dnsrelay-mips
+
+# MIPS little-endian (Atheros)
+CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags="-s -w" -o dnsrelay-mipsle
+```
+
+---
+
+## Data files
+
+Download once into the same directory:
+
+```bash
+# Resolvers
 wget https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md -O public-resolvers.md
 
-# Релеи (основной список)
+# Relays
 wget https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md -O relays.md
 
-# dnscry.pt (дополнительные релеи и резолверы)
+# dnscry.pt (extra relays + resolvers)
 wget https://www.dnscry.pt/resolvers.md -O dnscry.pt-resolvers.md
 
-# Quad9 (отдельный список)
+# Quad9 (separate list)
 wget https://raw.githubusercontent.com/Quad9DNS/dnscrypt-settings/main/dnscrypt/quad9-resolvers.md -O quad9-resolvers.md
 
-# Объединённый список релеев (рекомендуется)
+# Optional: merge relays
 cat relays.md dnscry.pt-resolvers.md > relays-all.md
 ```
 
-## Использование
+---
 
-### 1. Полный авто-конвейер (основной сценарий)
+## Usage
+
+### `auto` — full pipeline (recommended)
 
 ```bash
 ./dnsrelay -mode auto \
@@ -89,22 +86,24 @@ cat relays.md dnscry.pt-resolvers.md > relays-all.md
   -c 50 \
   -timeout 3s \
   -top 100 \
-  -out-prefix mxlinux \
-  2>&1 | tee mxlinux-auto.log
+  -recommend 10 \
+  -out-prefix myconfig \
+  -only-eu \
+  -exclude-relay-pattern "moscow,russia,msk,spb" \
+  2>&1 | tee myconfig.log
 ```
 
-**Что произойдёт:**
-1. Отфильтрует живые резолверы → `mxlinux-resolvers-alive.md`
-2. Отфильтрует живые релеи → `mxlinux-relays-alive.md`
-3. Возьмёт топ-100 из каждого (300 строк)
-4. Построит матрицу 100×100 = 10 000 пар → `mxlinux-matrix.tsv`
-5. Напечатает готовый конфиг + запишет `mxlinux-matrix-routes.toml`
+**What it does:**
 
-**Время:** 15–25 минут на ПК, 30–60 минут на роутере.
+1. Filters alive resolvers → `myconfig-resolvers-alive.md`
+2. Filters alive relays → `myconfig-relays-alive.md`
+3. Takes top-100 of each
+4. Builds 100×100 matrix → `myconfig-matrix.tsv`
+5. Prints and saves the recommended config → `myconfig-matrix-routes.toml`
 
-**Одна команда — полный конфиг на выходе.**
+**Time:** ~20 minutes on a PC, ~40 minutes on a router.
 
-### 2. Только живые релеи
+### `dnscrypt` — filter alive relays only
 
 ```bash
 ./dnsrelay -mode dnscrypt \
@@ -113,9 +112,7 @@ cat relays.md dnscry.pt-resolvers.md > relays-all.md
   -out-file relays-alive.md
 ```
 
-Время: 1–2 минуты. Результат — `relays-alive.md`.
-
-### 3. Только живые резолверы
+### `resolvers-filter` — filter alive resolvers only
 
 ```bash
 ./dnsrelay -mode resolvers-filter \
@@ -124,9 +121,7 @@ cat relays.md dnscry.pt-resolvers.md > relays-all.md
   -resolvers-filter-out resolvers-alive.md
 ```
 
-Время: 2–5 минут. Результат — `resolvers-alive.md`.
-
-### 4. Матрица вручную
+### `matrix` — build matrix and recommend
 
 ```bash
 ./dnsrelay -mode matrix \
@@ -134,256 +129,189 @@ cat relays.md dnscry.pt-resolvers.md > relays-all.md
   -f relays-alive.md \
   -c 50 -timeout 3s \
   -matrix-out matrix.tsv \
-  -top 10
+  -recommend 10
 ```
 
-Результаты:
-- `matrix.tsv` — таблица `резолвер × релей`:
-  - число = задержка в мс
-  - `X` = TIMEOUT
-  - `-` = не проверялось
-- `matrix-routes.toml` — готовый конфиг на 10 резолверов
-
-### 5. ODoH
+### `odoh` — check ODoH relays and targets
 
 ```bash
 ./dnsrelay -mode odoh -c 10 -timeout 10s
 ```
 
-Проверяет ODoH-релеи и цели. Результат — `odoh-results.txt` в формате `relay|target|latency`.
+---
 
-## Все флаги
+## Flags
 
-| Флаг | По умолчанию | Описание |
+| Flag | Default | Description |
 |---|---|---|
-| `-mode` | `tcp` | Режим: `auto`, `dnscrypt`, `resolvers-filter`, `matrix`, `tcp`, `odoh` |
-| `-f` | `/etc/dnscrypt-proxy/relays.md` | Файл релеев |
-| `-resolvers` | `/etc/dnscrypt-proxy2/public-resolvers.md` | Файл резолверов |
-| `-c` | `50` | Количество воркеров |
-| `-timeout` | `5s` | Таймаут запроса |
-| `-proto` | `udp` | Протокол до релея: `udp` или `tcp` |
-| `-top` | `5` | Сколько резолверов рекомендовать |
-| `-out-prefix` | `auto` | Префикс выходных файлов (для `-mode auto`) |
-| `-matrix-out` | `matrix.tsv` | Куда писать матрицу |
-| `-out-file` | — | Куда писать живые релеи (для `-mode dnscrypt`) |
-| `-resolvers-filter-out` | `resolvers-alive.md` | Куда писать живые резолверы |
-| `-exclude-relay-pattern` | `moscow,russia,msk,spb` | Подстроки для исключения релеев (через запятую) |
-| `-only-eu` | `false` | Оставить только европейские релеи |
-| `-v` | `false` | Подробный вывод |
-| `-stamp` | AdGuard DNS | Stamp резолвера для проверки релеев |
-| `-odoh-relays` | `odoh-relays.md` | Файл ODoH-релеев |
-| `-odoh-servers` | `odoh-servers.md` | Файл ODoH-целей |
-| `-odoh-out` | `odoh-results.txt` | Куда писать результаты ODoH |
-| `-odoh-target` | `odoh-cloudflare` | Целевой ODoH-сервер для проверки релеев |
+| `-mode` | `tcp` | `auto`, `dnscrypt`, `resolvers-filter`, `matrix`, `tcp`, `odoh` |
+| `-f` | `/etc/dnscrypt-proxy/relays.md` | Relays file |
+| `-resolvers` | `public-resolvers.md` | Resolvers file |
+| `-c` | `50` | Workers |
+| `-timeout` | `5s` | Request timeout |
+| `-proto` | `udp` | Protocol to relay: `udp` or `tcp` |
+| `-top` | `100` | Number of resolvers to test in the matrix |
+| `-recommend` | `10` | Number of resolvers to recommend in the final config |
+| `-out-prefix` | `auto` | Output prefix for `-mode auto` |
+| `-matrix-out` | `matrix.tsv` | Where to write the matrix |
+| `-out-file` | — | Where to write alive relays (`-mode dnscrypt`) |
+| `-resolvers-filter-out` | `resolvers-alive.md` | Where to write alive resolvers |
+| `-exclude-relay-pattern` | `moscow,russia,msk,spb` | Substrings to exclude (comma-separated) |
+| `-only-eu` | `false` | Only European relays |
+| `-v` | `false` | Verbose |
+| `-stamp` | AdGuard DNS | Resolver stamp for relay testing |
+| `-odoh-relays` | `odoh-relays.md` | ODoH relays file |
+| `-odoh-servers` | `odoh-servers.md` | ODoH targets file |
+| `-odoh-out` | `odoh-results.txt` | ODoH output |
+| `-odoh-target` | `odoh-cloudflare` | Target ODoH server for relay testing |
 
-## Примеры использования
+---
 
-### Быстрая проверка (5 минут)
-
-```bash
-./dnsrelay -mode auto -top 30 -c 30 -timeout 3s -out-prefix quick
-```
-
-30×30 = 900 пар. Даст рабочий конфиг на 5 резолверов.
-
-### Полный прогон без РФ-релеев, только EU (30 минут)
-
-```bash
-./dnsrelay -mode auto \
-  -top 100 -c 50 -timeout 3s \
-  -out-prefix full-eu \
-  -only-eu \
-  -exclude-relay-pattern "moscow,russia,msk,spb,dnscry.pt-anon-moscow"
-```
-
-### Обновить только список живых релеев
-
-```bash
-./dnsrelay -mode dnscrypt \
-  -f relays-all.md \
-  -c 50 -timeout 5s -proto udp \
-  -out-file relays-alive.md
-```
-
-## Формат выходных файлов
+## Output files
 
 ### `*-routes.toml`
 
-Готовый блок для `/etc/dnscrypt-proxy/dnscrypt-proxy.toml`:
+Ready-to-paste block for `/etc/dnscrypt-proxy/dnscrypt-proxy.toml`:
 
 ```toml
-# Автоматически сгенерировано dnsrelay
-# Дата: 2026-09-21 10:15:20
+# Generated by dnsrelay at 2026-09-21 12:00:00
 
 server_names = [
-    'cs-swe',
-    'cs-norway',
-    'cs-dus',
-    ...
+    'cs-czech',
+    'cs-belgium',
+    'cs-manchester',
 ]
 
 [anonymized_dns]
 routes = [
-    { server_name = 'cs-swe', via = ['dnscry.pt-anon-bremen-ipv4', 'anon-cs-de', 'anon-cs-austria'] },  # health 99%, latencies: 265, 432, 443 мс
+    { server_name = 'cs-czech', via = ['anon-scaleway-ams', 'anon-cs-nl', 'dnscry.pt-anon-gdansk-ipv4'] },  # health 98%, latencies: 535, 586, 755 ms
     ...
 ]
 ```
 
-**Health** — процент работающих пар для этого резолвера (OK/total).
-**Latencies** — задержки для выбранных релеев (по возрастанию).
+- `health` — percentage of working pairs for this resolver.
+- `latencies` — measured latencies for the chosen relays.
 
 ### `*-matrix.tsv`
 
-Таблица:
-- **Строки** — резолверы
-- **Столбцы** — релеи
-- **Значения**: задержка мс / `X` (TIMEOUT) / `-` (не проверялось)
+Table:
+- **Rows** — resolvers
+- **Columns** — relays
+- **Values**: latency in ms / `X` (timeout) / `-` (not tested)
 
 ### `*-resolvers-alive.md` / `*-relays-alive.md`
 
-Тот же формат, что и исходные `.md`:
+Same format as the original `.md` files — can be reused as input.
+
+---
+
+## How it works
+
+### Anonymized DNSCrypt packet format
 
 ```
-## имя
-sdns://...
+[0xff × 8] [0x00 0x00] [IPv6-mapped resolver IP (16 bytes)] [port (2 bytes BE)] [encrypted payload]
 ```
 
-Можно использовать как входные файлы.
+28-byte header prepended to the encrypted DNSCrypt payload.
 
-## Запуск на роутере (OpenWrt, ARM64)
+The relay sees only the client's IP and the target resolver's IP:port, but cannot read the payload. The resolver sees the decrypted query but not the client's IP.
 
-### 1. Собрать ARM64
+### Why matrix
+
+Not every pair works:
+
+- Relay may block "own to own" connections (`cs-de` via `anon-cs-de`).
+- Resolver may forward to Google (`dct-*`).
+- Relay may be too far (500+ ms).
+- Resolver may require `direct_cert_fallback = true` (AdGuard).
+
+`dnsrelay` tests all pairs and keeps only working ones.
+
+### Google-forward detection
+
+Query `whoami.akamai.net` via the resolver. Akamai returns the **IP of the resolver that performed the query on your behalf**. If this IP is in a Google subnet (`8.8.8.8`, `172.253.*`, `74.125.*`, `173.194.*`, etc.) — the resolver forwards to Google, and it gets excluded.
+
+This automatically filters out `dct-*` and similar resolvers — no more manual `ipleak.net` checks.
+
+---
+
+## Deployment on OpenWrt router
+
+### Build for ARM64
 
 ```bash
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
   go build -ldflags="-s -w" -o dnsrelay-arm64
 ```
 
-### 2. Скопировать на роутер
+### Copy to router
 
 ```bash
 scp dnsrelay-arm64 public-resolvers.md relays.md dnscry.pt-resolvers.md \
   root@192.168.1.1:/tmp/
 ```
 
-### 3. Запустить на роутере
+### Run on router
 
 ```bash
 ssh root@192.168.1.1
 cd /tmp
 chmod +x dnsrelay-arm64
 
-# Полный авто-конвейер с ограничением
 ./dnsrelay-arm64 -mode auto \
   -resolvers public-resolvers.md \
   -f relays.md \
   -c 5 \
   -timeout 10s \
   -top 50 \
+  -recommend 10 \
   -out-prefix router \
   -only-eu \
   2>&1 | tee router-auto.log
 ```
 
-**Важно на роутере:**
-- `-c 5` — не больше 5–10 воркеров (мало RAM)
-- `-timeout 10s` — путь через VPN длиннее
-- `-top 50` — 50×50 = 2500 пар (30–60 минут)
+**Router-specific notes:**
 
-### 4. Применить результат
+- `-c 5` — keep workers low (limited RAM)
+- `-timeout 10s` — VPN path is longer
+- `-top 50` — 50×50 = 2500 pairs (~30 min)
+
+### Apply the result
 
 ```bash
-# Посмотреть готовый конфиг
-tail -40 router-auto.log
-
-# Скопировать server_names и routes в /etc/dnscrypt-proxy2/dnscrypt-proxy.toml
+# Copy server_names and routes into:
 vi /etc/dnscrypt-proxy2/dnscrypt-proxy.toml
 
-# Проверить TOML
+# Check TOML
 python3 -c "import tomllib; tomllib.load(open('/etc/dnscrypt-proxy2/dnscrypt-proxy.toml','rb'))" && echo "TOML OK"
 
-# Перезапустить
+# Restart
 /etc/init.d/dnscrypt-proxy restart
 sleep 10
 logread | grep -i "live servers" | tail -1
 ```
 
-## Как это работает
-
-### Anonymized DNSCrypt
-
-`dnscrypt-proxy` устанавливает зашифрованную сессию с резолвером, а затем
-отправляет запрос **через релей**. Релей не может расшифровать запрос, но
-видит IP клиента. Резолвер не видит IP клиента, но видит запрос.
-
-Формат анонимизированного пакета:
-```
-[0xff × 8] [0x00 0x00] [IPv6-маппинг резолвера (16 байт)] [порт (2 байта BE)] [encrypted payload]
-```
-
-Итого 28 байт заголовка перед шифрованным пакетом.
-
-### Почему матрица
-
-Не все пары (резолвер, релей) работают:
-- Релей может блокировать соединения «свой к своему» (`cs-de` через `anon-cs-de`).
-- Резолвер может форвардить в Google (`dct-*`).
-- Релей может быть физически далеко (500+ мс задержки).
-- Резолвер может требовать `direct_cert_fallback = true` (AdGuard).
-
-`dnsrelay` перебирает все пары и оставляет только рабочие.
-
-### Фильтр Google-форвардеров
-
-Запрос к `whoami.akamai.net` возвращает **IP резолвера, который делал запрос**.
-Если этот IP в подсети Google (`8.8.8.8`, `172.253.*`, `74.125.*` и т.д.) —
-резолвер форвардит в Google, и его надо исключить.
-
-Так автоматически отсеиваются `dct-*` и подобные, которые мы вручную
-вычисляли через `ipleak.net`.
+---
 
 ## Troubleshooting
 
-### `too many open files`
-
-Снизить `-c` до 20–30.
-
-### Все пары TIMEOUT
-
-- Увеличить `-timeout` до 10s.
-- Проверить связь с `dnscrypt-proxy` (порт 5353).
-- Проверить, что провайдер не блокирует UDP/443.
-
-### `FATAL: toml: line X: ...`
-
-Ошибка в конфиге `dnscrypt-proxy.toml`. Скорее всего, незакрытая скобка
-в `routes` или лишняя запятая.
-
-### `live servers: 0`
-
-Все резолверы мертвы. Проверить:
-- `public-resolvers.md` актуален.
-- Провайдер не блокирует DNS-трафик.
-- `dnscrypt-proxy` вообще работает: `journalctl -u dnscrypt-proxy -n 50`.
-
-### Поехали столбцы в TSV
-
-Визуальный баг: `XX` вместо `X X`, `--` вместо `- -`. Не критично —
-TSV не используется для парсинга, только для чтения глазами.
-
-## Зависимости
-
-- [github.com/ameshkov/dnscrypt/v2](https://github.com/ameshkov/dnscrypt) — DNSCrypt-клиент
-- [github.com/miekg/dns](https://github.com/miekg/dns) — DNS-сообщения
-- [github.com/cloudflare/odoh-go](https://github.com/cloudflare/odoh-go) — ODoH
-
-## Лицензия
-
-MIT
-```
+| Problem | Fix |
+|---|---|
+| `too many open files` | Lower `-c` to 20–30 |
+| All pairs TIMEOUT | Increase `-timeout` to 10s; check UDP/443 is not blocked |
+| `live servers: 0` | Verify `public-resolvers.md`, check `journalctl -u dnscrypt-proxy` |
+| `FATAL: toml: line X` | Broken config: unclosed bracket or extra comma in `routes` |
+| Misaligned columns in TSV | Cosmetic bug; TSV is for reading, not parsing |
 
 ---
 
-Готово. Сохрани в `~/dnsbrute/README.md`. Если решишь выложить на GitHub — README готов, можно добавить `LICENSE` (MIT) и `.gitignore` (исключить бинарники и `.md`-файлы с данными).
+## Dependencies
 
-Что дальше — финальный прогон `auto` на MX Linux, или ещё что-то доделать в утилите?
+- [github.com/ameshkov/dnscrypt/v2](https://github.com/ameshkov/dnscrypt) — DNSCrypt client
+- [github.com/miekg/dns](https://github.com/miekg/dns) — DNS messages
+- [github.com/cloudflare/odoh-go](https://github.com/cloudflare/odoh-go) — ODoH
+
+## License
+
+MIT — see [LICENSE](LICENSE).
